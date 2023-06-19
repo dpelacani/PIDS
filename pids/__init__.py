@@ -146,6 +146,7 @@ class PIDS:
         self.acquisitions = None
         self.problem = None
         self.data = None
+        self.grad = None
 
         self.setup()
 
@@ -173,15 +174,21 @@ class PIDS:
                 self.problem.transducers.default()
                 self.problem.geometry.default("elliptical", num_locations)
 
-    def save(self, folder_path="", plot=False):
+    def save(self, folder_path="", plot=False, **kwargs):
         assert self.data is not None, "self.process must be called before attempting to save"
         if not folder_path:
             folder_path = os.getcwd()
         path = os.path.join(folder_path, self.name + "-pids")
         np.save(path+".npy", self.data)
+        
         if plot:
-            plt.imsave(path+".png", self.data)
+            self.grad.plot(**kwargs)
+            plt.savefig(path+".png")
 
+            self.problem.plot(acquisitions=False, **kwargs)
+            plt.savefig(os.path.join(folder_path, self.name + "-problem.png"))
+            
     def process(self, *args, **kwargs):
         mosaic.run(_process_first_grad, problem=self.problem, x0=self.x0, *args, **kwargs)
-        self.data = self.problem.medium.vp.grad.data
+        self.grad = self.problem.medium.vp.grad
+        self.data = self.grad.data
