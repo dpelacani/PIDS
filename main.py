@@ -17,15 +17,29 @@ if __name__ == "__main__":
     axs[1].imshow(x0, vmin=1400, vmax=3000)
 
     # Acquisition and name
-    acquisitions_file = "/home/dp4018/data/ultrasound-data/Ultrasound-Vp-sagittal-data/acoustic/data/vp_100206_3shots-Acquisitions.h5"
+    acquisitions_file = "/home/dp4018/data/ultrasound-data/Ultrasound-Vp-sagittal-data/acoustic/data/vp_100206_3shots-360-Acquisitions.h5"
     name = infer_name_from_acquisition_file(acquisitions_file)
     
-    # PIDS instatiantion and processing
+    # PIDS instatiantion
     pids = PIDS(acquisitions_file=acquisitions_file, name=name, x0=x0)
-    pids.process()
 
-    # Saving problem and processed data
+    # Save problem of true model for examples figures
+    from stride import *
+    vp = ScalarField(
+        name='vp', grid=pids.problem.grid,
+        data=x,
+        needs_grad=True
+    )
+    pids.problem.medium.add(vp)
     pids.problem.plot(acquisitions=False, cmap="cividis")
-    plt.savefig(os.path.join("./processed", name, "_problem.png"))
+    plt.savefig(os.path.join("./figures", "example_x_problem.png"))
 
-    pids.save(folder_path="./processed/", plot=True)
+    # Save mid shot plot of observed data for examples figures
+    mid_shot = pids.problem.acquisitions.shots[int((len(pids.problem.acquisitions.shots) - 1)/2)]
+    mid_shot.plot_observed()
+    plt.savefig(os.path.join("./figures", "example_data.png"))
+
+    # Process and save PIDS data as .npy; save plots of PIDS and Problem as .png
+    pids.process()
+    pids.save(folder_path="./processed/", plot=True, cmap="cividis")
+
