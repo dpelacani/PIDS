@@ -1,6 +1,7 @@
 import numpy as np
-# from . import PIDS
-from .utils import infer_name_from_acquisition_file, create_x0_from_true_model
+
+from pids import PIDS
+from pids.utils import create_x0_from_true_model, infer_name_from_acquisition_file
 
 import matplotlib.pyplot as plt
 plt.rcParams['image.cmap'] = 'cividis'
@@ -23,4 +24,4 @@ if __name__ == "__main__":
     # PIDS instatiantion and processing
     pids = PIDS(acquisitions_file=acquisitions_file, name=name, x0=x0)
     pids.process()
-    pids.save(plot=True)
+    pids.save(folder_path="./processed/", plot=True)
