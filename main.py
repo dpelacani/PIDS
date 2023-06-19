@@ -1,3 +1,4 @@
+import os
 import numpy as np
 
 from pids import PIDS
@@ -14,8 +15,6 @@ if __name__ == "__main__":
     fig, axs = plt.subplots(1, 2)
     axs[0].imshow(x, vmin=1400, vmax=3000)
     axs[1].imshow(x0, vmin=1400, vmax=3000)
-    plt.savefig("models.png")
-
 
     # Acquisition and name
     acquisitions_file = "/home/dp4018/data/ultrasound-data/Ultrasound-Vp-sagittal-data/acoustic/data/vp_100206_3shots-Acquisitions.h5"
@@ -24,4 +23,9 @@ if __name__ == "__main__":
     # PIDS instatiantion and processing
     pids = PIDS(acquisitions_file=acquisitions_file, name=name, x0=x0)
     pids.process()
+
+    # Saving problem and processed data
+    pids.problem.plot(acquisitions=False, cmap="cividis")
+    plt.savefig(os.path.join("./processed", name, "_problem.png"))
+
     pids.save(folder_path="./processed/", plot=True)
