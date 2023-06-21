@@ -23,7 +23,9 @@ async def __process_first_grad(problem, pde, loss_fn, *args, **kwargs):
     process_wavelets = ProcessWavelets.remote(f_min=f_min, f_max=f_max,
                                             len=runtime.num_workers, **kwargs)
     process_traces = ProcessTraces.remote(f_min=f_min, f_max=f_max,
-                                        len=runtime.num_workers, **kwargs)
+                                          len=runtime.num_workers,
+                                          norm_per_trace=True, **kwargs)
+    process_grad = ProcessGlobalGradient.remote(norm_field=True)
 
     using_gpu = kwargs.get('platform', 'cpu') == 'nvidia-acc'
     if using_gpu:
@@ -80,8 +82,14 @@ async def __process_first_grad(problem, pde, loss_fn, *args, **kwargs):
     if hasattr(problem.medium.vp, 'is_proxy') and problem.medium.vp.is_proxy:
         await problem.medium.vp.pull(attr='grad')
 
-    
     logger.info(f'PIDS computed with values in range [{np.min(problem.medium.vp.grad.data)}, {np.max(problem.medium.vp.grad.data)}]')
+
+    # apply grad processing
+    grad = problem.medium.vp.process_grad(**kwargs)
+    processed_grad = process_grad(grad, **kwargs)
+    problem.medium.vp.process_grad=processed_grad
+
+    logger.info(f'PIDS normalised')
     logger.info('====================================================================')
 
 
@@ -107,8 +115,8 @@ async def _process_first_grad(runtime, *args, **kwargs):
 
 
 class PIDS:
-    def __init__(self, acquisitions_file, geometry_file=None, x0=None, name="acquisition",
-                 water_vp=1480., device="cpu", **kwargs):
+    def __init__(self, acquisitions_file, geometry_file=None, transducers_file=None,
+                 x0=None, name="acquisition", device="cpu", **kwargs):
         """
         :param acquisitions_file:
             Acquisition dump file from stride in `h5` format.
@@ -119,6 +127,10 @@ class PIDS:
             with the number of locations equal to the number of sources.
         :type first: ``str``
 
+        :param geometry_file  [Optional, default None]:
+            Transducers dump file from stride in `h5` format. If None, initialises as Stride's default transducers.
+        :type first: ``str``
+
         :param x0 [Optional, default None]:
             Starting model. If None will be initialised as a homogeneous medium of vp 1500m/s.
 
@@ -126,10 +138,6 @@ class PIDS:
             Name of the Acquistion. Also the name of the PIDS file saved if not specified
             `save` method.
         :type name: ``str``
-
-        :param water_vp [Optional, default 1480.]::
-            Acoustic speed of water to consider in the model.
-        :type name: ``float``
 
         :param device:
 
@@ -139,9 +147,9 @@ class PIDS:
         self.x0 = x0
         self.name = name
         self.device = device
-        self.water_vp = water_vp
         self.acquisitions_file = acquisitions_file
         self.geometry_file = geometry_file
+        self.transducers_file = transducers_file
 
         self.acquisitions = None
         self.problem = None
@@ -167,12 +175,17 @@ class PIDS:
                     time=self.acquisitions.grid.time,
                     acquisitions=self.acquisitions
             )
-            if self.geometry_file is not None:
-                self.problem.geometry.load(os.path.abspath(self.geometry_file))
-            else:
-                num_locations = len(self.acquisitions.shots)
-                self.problem.transducers.default()
-                self.problem.geometry.default("elliptical", num_locations)
+
+        if self.transducers_file is not None:
+            self.problem.transducers.load(os.path.abspath(self.transducers_file))
+        else:
+            self.problem.transducers.default()
+
+        if self.geometry_file is not None:
+            self.problem.geometry.load(os.path.abspath(self.geometry_file))
+        else:
+            num_locations = len(self.acquisitions.shots)
+            self.problem.geometry.default("elliptical", num_locations)
 
     def save(self, folder_path="", plot=False, **kwargs):
         assert self.data is not None, "self.process must be called before attempting to save"
@@ -182,11 +195,14 @@ class PIDS:
         np.save(path+".npy", self.data)
         
         if plot:
-            self.grad.plot(**kwargs)
-            plt.savefig(path+".png")
-
             self.problem.plot(acquisitions=False, **kwargs)
             plt.savefig(os.path.join(folder_path, self.name + "-problem.png"))
+
+            kwargs["cmap"] = "gray"
+            kwargs["vmin"] = -1e-4
+            kwargs["vmax"] = 1e-4
+            self.grad.plot(**kwargs)
+            plt.savefig(path+".png")
             
     def process(self, *args, **kwargs):
         mosaic.run(_process_first_grad, problem=self.problem, x0=self.x0, *args, **kwargs)
