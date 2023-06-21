@@ -3,3 +3,4 @@ devfiles/
 processed/
 mosaic/
 slurm*
+*.ipynb
