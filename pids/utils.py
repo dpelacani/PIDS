@@ -1,6 +1,9 @@
 import os
 import numpy as np
 
+def scale2range(x, range=[-1, 1]):
+    return (x - x.min()) * (max(range) - min(range)) / (x.max() - x.min()) + min(range)
+
 def infer_name_from_acquisition_file(acquisition_file):
     name = os.path.splitext(os.path.basename(acquisition_file))[-2]
     for acq in ["-acquisitions", "acquisitions", "acquisition", "-acquisition"]:
